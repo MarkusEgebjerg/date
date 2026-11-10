@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>You’re invited</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3e9f7; --ink:#2a1a40; --muted:#6d5a85; --card:#fffaf5;
+  --accent:#ff5d73; --accent-ink:#fff; --mint:#8fe3c8; --line:#2a1a40;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#1d1230;--ink:#f6ecff;--muted:#bba6d6;--card:#2b1c45;--line:#f6ecff;--mint:#58c6a4}
+}
+:root[data-theme="dark"]{--bg:#1d1230;--ink:#f6ecff;--muted:#bba6d6;--card:#2b1c45;--line:#f6ecff;--mint:#58c6a4}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;
+  display:grid;place-items:center;padding:24px;overflow-x:hidden}
+.card{position:relative;width:min(520px,100%);background:var(--card);border:3px solid var(--line);border-radius:28px;
+  padding:40px 32px 32px;box-shadow:10px 10px 0 var(--accent);text-align:left}
+.sticker{position:absolute;top:-22px;right:22px;background:var(--mint);color:#2a1a40;border:3px solid var(--line);
+  border-radius:999px;padding:6px 16px;font-weight:500;transform:rotate(4deg)}
+h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(2.2rem,8vw,3.2rem);
+  line-height:1.02;margin:0 0 16px;letter-spacing:-.02em}
+p{font-size:1.1rem;line-height:1.5;margin:0 0 20px;max-width:44ch}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0 0 28px;font-size:1.05rem}
+dt{color:var(--muted)} dd{margin:0;font-weight:500}
+.actions{display:flex;gap:16px;align-items:center;min-height:64px;flex-wrap:wrap}
+button{font:inherit;font-weight:500;font-size:1.15rem;border-radius:999px;border:3px solid var(--line);
+  padding:14px 30px;cursor:pointer;color:var(--ink);background:var(--card)}
+#yes{background:var(--accent);color:var(--accent-ink);transform-origin:left center;transition:transform .2s}
+#yes:hover{transform:scale(1.06)}
+#no{transition:left .25s ease,top .25s ease}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+#hint{min-height:1.4em;margin:18px 0 0;font-size:.95rem;color:var(--muted)}
+#done{display:none}
+.card.accepted #ask{display:none}
+.card.accepted #done{display:block}
+#done h1{margin-bottom:12px}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:5}
+@media (prefers-reduced-motion:reduce){#no,#yes{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<main class="card" id="card">
+  <div class="sticker">Specielt tilbud til dig!</div>
+
+  <section id="ask">
+    <h1 id="title"></h1>
+    <p id="intro"></p>
+    <dl>
+      <dt>Hvornår</dt><dd id="hvornår"></dd>
+      <dt>Plan</dt><dd id="plan"></dd>
+    </dl>
+    <div class="actions" id="actions">
+      <button id="yes" type="button">Ja</button>
+      <button id="no" type="button">Nej</button>
+    </div>
+    <p id="hint" aria-live="polite"></p>
+  </section>
+
+  <section id="done" aria-live="polite">
+    <h1>Det en date.</h1>
+    <p id="doneText"></p>
+  </section>
+</main>
+
+<script>
+// ✏️ Edit these to personalise the invitation
+const CONFIG = {
+  name: "Lærke musen",
+  intro: "Date time! Du er hermed inviteret på end data, og du må IKKE svare nej!",
+  hvornår: "Tidspunkt i denne uge, når det passer dig.",
+  plan: "Pool efterfulgt at lækker mad",
+  doneText: "Perfecto. Detaljerne er på vej. Hav en fortsat god dag, smukke\u{1F618}."
+};
+
+const $ = id => document.getElementById(id);
+$("title").textContent = CONFIG.name + ", vil du på date med mig?";
+$("intro").textContent = CONFIG.intro;
+$("hvornår").textContent = CONFIG.hvornår;
+$("plan").textContent = CONFIG.plan;
+$("doneText").textContent = CONFIG.doneText;
+
+const yes = $("yes"), no = $("no"), hint = $("hint");
+const lines = [
+  "", "Niks, du.", "Nice try", "Tror du er ved at trykke på den forkerte knap, makker?",
+  "så stopper du!.", "Bliver snart irriteret.",
+  "Jeg kan blive ved hele dagen\u{1F608}.", "Seriøst, tryk nu på ja."
+];
+let dodges = 0, moved = false, lastMove = 0;
+
+function dodge(px, py){
+  const now = Date.now();
+  if (now - lastMove < 120) return;
+  lastMove = now;
+  if (!moved){
+    // lift the button out of the layout so it can roam the whole viewport
+    const r = no.getBoundingClientRect();
+    const ph = document.createElement("span");
+    ph.style.cssText = "display:inline-block;width:"+r.width+"px;height:"+r.height+"px";
+    no.parentNode.insertBefore(ph, no);
+    no.style.cssText += ";position:fixed;left:"+r.left+"px;top:"+r.top+"px;z-index:10";
+    moved = true;
+  }
+  const w = no.offsetWidth, h = no.offsetHeight, m = 12;
+  const maxX = window.innerWidth - w - m, maxY = window.innerHeight - h - m;
+  let x, y, tries = 0;
+  do {
+    x = m + Math.random() * (maxX - m);
+    y = m + Math.random() * (maxY - m);
+    tries++;
+  } while (Math.hypot(x + w/2 - px, y + h/2 - py) < 220 && tries < 30);
+  no.style.left = Math.max(m, x) + "px";
+  no.style.top = Math.max(m, y) + "px";
+  dodges++;
+  hint.textContent = lines[Math.min(Math.ceil(dodges / 2), lines.length - 1)] || "";
+  yes.style.transform = "scale(" + Math.min(1 + dodges * 0.04, 1.4) + ")";
+}
+
+document.addEventListener("pointermove", e => {
+  const r = no.getBoundingClientRect();
+  const cx = r.left + r.width/2, cy = r.top + r.height/2;
+  if (Math.hypot(e.clientX - cx, e.clientY - cy) < 110) dodge(e.clientX, e.clientY);
+});
+// touch screens and keyboard users can't hover, so dodge on press and focus too
+no.addEventListener("pointerdown", e => { e.preventDefault(); dodge(e.clientX, e.clientY); });
+no.addEventListener("focus", () => dodge(window.innerWidth/2, window.innerHeight/2));
+no.addEventListener("click", e => e.preventDefault());
+
+// Yes
+yes.addEventListener("click", () => {
+  $("card").classList.add("accepted");
+  no.style.display = "none";
+  confetti();
+});
+
+function confetti(){
+  const c = $("confetti"), ctx = c.getContext("2d");
+  c.width = innerWidth; c.height = innerHeight;
+  const colors = ["#ff5d73","#8fe3c8","#ffd166","#9b7bff","#ffffff"];
+  const bits = Array.from({length:160}, () => ({
+    x: Math.random()*c.width, y: -20 - Math.random()*c.height*.5,
+    s: 6 + Math.random()*8, vy: 2 + Math.random()*4, vx: -1.5 + Math.random()*3,
+    r: Math.random()*6, vr: -.2 + Math.random()*.4, c: colors[(Math.random()*colors.length)|0]
+  }));
+  let frames = 0;
+  (function tick(){
+    ctx.clearRect(0,0,c.width,c.height);
+    bits.forEach(b => {
+      b.x += b.vx; b.y += b.vy; b.r += b.vr;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.r);
+      ctx.fillStyle = b.c; ctx.fillRect(-b.s/2,-b.s/4,b.s,b.s/2); ctx.restore();
+    });
+    if (++frames < 320) requestAnimationFrame(tick); else ctx.clearRect(0,0,c.width,c.height);
+  })();
+}
+</script>
+</body>
+</html>
