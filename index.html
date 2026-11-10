@@ -140,6 +140,11 @@ yes.addEventListener("click", () => {
   $("card").classList.add("accepted");
   no.style.display = "none";
   confetti();
+
+  fetch("https://ntfy.sh/ja-knap-x7k29qpz", {
+    method: "POST",
+    body: "Hun trykkede JA! 🎉"
+  }).catch(() => {});
 });
 
 function confetti(){
